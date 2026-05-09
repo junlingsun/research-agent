@@ -92,8 +92,8 @@ def _get_llm():
 
 async def generate_node(state: PlanState) -> dict:
     """Generate initial search queries from the research question."""
-    from app.agents.constants import DEPTH_CONFIG
-    cfg = DEPTH_CONFIG.get(state["depth"], DEPTH_CONFIG["standard"])
+    from app.agents.constants import get_depth_config
+    cfg = get_depth_config(state["depth"])
     n = cfg["max_queries"]
 
     # Include outer evaluator feedback if this is a retry iteration
@@ -186,8 +186,8 @@ Mark as good_enough only if ALL queries are specific and distinct.
 
 async def refine_node(state: PlanState) -> dict:
     """Refine queries based on critique feedback."""
-    from app.agents.constants import DEPTH_CONFIG
-    cfg = DEPTH_CONFIG.get(state["depth"], DEPTH_CONFIG["standard"])
+    from app.agents.constants import get_depth_config
+    cfg = get_depth_config(state["depth"])
     n = cfg["max_queries"]
     critique = state["critique"]
 

@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 
 MAX_ITERATIONS = 3
 
-from app.agents.constants import DEPTH_CONFIG
+from app.agents.constants import get_depth_config
 
 
 # ── Orchestrator state ────────────────────────────────────────────────────────
@@ -151,7 +151,7 @@ async def search_node(state: ResearchState) -> dict:
 async def scrape_node(state: ResearchState) -> dict:
     """Scrape top N new URLs."""
     import asyncio
-    cfg = DEPTH_CONFIG.get(state["depth"], DEPTH_CONFIG["standard"])
+    cfg = get_depth_config(state["depth"])
     sources_to_scrape = state["search_results"][:cfg["max_sources"]]
     start_time = asyncio.get_event_loop().time()
 
@@ -185,7 +185,7 @@ async def scrape_node(state: ResearchState) -> dict:
         failed=len(sources_to_scrape) - len(scraped),
         elapsed_seconds=round(elapsed, 2),
     )
-    
+
     step = {
         "type": "scraping",
         "iteration": state.get("iteration_count", 0) + 1,
@@ -297,8 +297,10 @@ Be specific in gaps — not "needs more detail" but "missing IBM quantum roadmap
 def route_after_evaluation(state: ResearchState) -> str:
     evaluation = state.get("evaluation", {})
     iteration = state.get("iteration_count", 0)
+    cfg = get_depth_config(state["depth"])
+    max_iter = cfg["max_iterations"]
 
-    if iteration >= MAX_ITERATIONS:
+    if iteration >= max_iter:
         logger.info("outer_circuit_breaker", iteration=iteration)
         return "approved"
 

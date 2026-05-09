@@ -275,15 +275,20 @@ async def finalize_node(state: SynthesizeState) -> dict:
 
 def route_after_critique(state: SynthesizeState) -> str:
     """Approve draft or send for revision — with revision cap."""
+    from app.agents.constants import get_depth_config
+    
     critique = state.get("critique")
     revision_count = state.get("revision_count", 0)
 
-    # Circuit breaker
-    if revision_count >= MAX_REVISIONS:
-        logger.info("synthesize_circuit_breaker", revision_count=revision_count)
-        return "finalize"
+    max_revisions = get_depth_config(state.get("depth", "standard")).get("max_revisions", MAX_REVISIONS)
 
+    # Always check quality first
     if critique and critique.is_good_enough:
+        return "finalize"
+    
+    # Circuit breaker
+    if revision_count >= max_revisions:
+        logger.info("synthesize_circuit_breaker", revision_count=revision_count)
         return "finalize"
 
     return "revise"
