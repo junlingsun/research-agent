@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     environment: str = "production"
+    llm_provider:str ="groq"
+    llm_model:str = "Llama-3.3-70B-Versatile"
 
     # API Keys
     openai_api_key: str
