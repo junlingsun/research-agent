@@ -101,12 +101,22 @@ async def plan_node(state: ResearchState) -> dict:
 
 async def search_node(state: ResearchState) -> dict:
     """Run all planned queries, skipping already-seen URLs."""
+    import asyncio
     seen_urls = state.get("seen_urls", set())
     all_results: list[dict] = []
+    start_time = asyncio.get_event_loop().time()
 
-    for q in state["search_queries"]:
-        results = await search_web(q, max_results=5)
-        all_results.extend(results)
+    # Run all queries simultaneously
+    query_results = await asyncio.gather(
+        *[search_web(q, max_results=5) for q in state["search_queries"]],
+        return_exceptions=True,
+    )
+
+    for q, result in zip(state["search_queries"], query_results):
+        if isinstance(result, Exception):
+            logger.warning("search_query_failed", query=q, error=str(result))
+        else:
+            all_results.extend(result)
 
     # Deduplicate — skip URLs seen in previous iterations
     newly_seen: set[str] = set()
@@ -116,8 +126,16 @@ async def search_node(state: ResearchState) -> dict:
             unique_results.append(r)
             newly_seen.add(r["url"])
 
+    elapsed = asyncio.get_event_loop().time() - start_time
     skipped = len(all_results) - len(unique_results)
-    logger.info("search_complete", new_sources=len(unique_results), skipped=skipped)
+    logger.info(
+        "search_complete", 
+        new_sources=len(unique_results), 
+        skipped=skipped,
+        elapsed_seconds=round(elapsed, 2),
+        queries=len(state["search_queries"])
+    )
+
     step = {
         "type": "search",
         "iteration": state.get("iteration_count", 0) + 1,
@@ -132,20 +150,42 @@ async def search_node(state: ResearchState) -> dict:
 
 async def scrape_node(state: ResearchState) -> dict:
     """Scrape top N new URLs."""
+    import asyncio
     cfg = DEPTH_CONFIG.get(state["depth"], DEPTH_CONFIG["standard"])
     sources_to_scrape = state["search_results"][:cfg["max_sources"]]
+    start_time = asyncio.get_event_loop().time()
 
     scraped: list[dict] = []
-    for source in sources_to_scrape:
+    async def scrape_one(source: dict) -> dict:
         content = await scrape_url.ainvoke({"url": source["url"]})
-        scraped.append({
+        return {
             "url": source["url"],
             "title": source["title"],
             "snippet": source["snippet"],
             "content": content,
-        })
+        }
+    
+    # Scrape all URLs simultaneously
+    results = await asyncio.gather(
+        *[scrape_one(source) for source in sources_to_scrape],
+        return_exceptions=True,
+    )
 
-    logger.info("scrape_complete", scraped_count=len(scraped))
+    for source, result in zip(sources_to_scrape, results):
+        if isinstance(result, Exception):
+            logger.warning("scrape_failed", url=source["url"], error=str(result))
+        else:
+            scraped.append(result)
+ 
+    elapsed = asyncio.get_event_loop().time() - start_time
+
+    logger.info(
+        "scrape_complete", 
+        scraped_count=len(scraped),
+        failed=len(sources_to_scrape) - len(scraped),
+        elapsed_seconds=round(elapsed, 2),
+    )
+    
     step = {
         "type": "scraping",
         "iteration": state.get("iteration_count", 0) + 1,
