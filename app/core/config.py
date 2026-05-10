@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     environment: str = "production"
+
+    # LLM provider
     llm_provider:str ="groq"
     llm_model:str = "Llama-3.3-70B-Versatile"
 
@@ -17,11 +19,15 @@ class Settings(BaseSettings):
     openai_api_key: str
     groq_api_key: str
     langsmith_api_key: str = ""
-    langsmith_tracing: bool = False
+    langsmith_tracing: bool = True
     langsmith_project: str = "research-agent"
 
     # Search
     tavily_api_key: str = ""
+
+    # Qdrant (vector DB for memory)
+    qdrant_url: str = "http://qdrant:6333"
+    embedding_model: str = "text-embedding-3-small"  # OpenAI embedding model
 
     # Security
     secret_key: str

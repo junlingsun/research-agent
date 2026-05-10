@@ -11,6 +11,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -28,6 +30,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     restart: unless-stopped
 
@@ -69,6 +73,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  
+  qdrant:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM qdrant/qdrant:latest
+        RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+    # Keep your other settings below
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   flower:
     image: mher/flower:2.0
@@ -82,3 +104,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  qdrant_data:

@@ -10,7 +10,7 @@ from slowapi.util import get_remote_address
 
 from app.core.config import get_settings
 from app.core.logging import get_logger, setup_logging
-from app.api.routes import research, health
+from app.api.routes import research, health, documents
 
 settings = get_settings()
 
@@ -85,3 +85,4 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 app.include_router(health.router)
 app.include_router(research.router, prefix="/api/v1")
+app.include_router(documents.router, prefix="/api/v1")

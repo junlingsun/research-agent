@@ -194,6 +194,22 @@ async def scrape_node(state: ResearchState) -> dict:
     return {"scraped_content": scraped, "steps": [step]}
 
 
+async def retrieve_docs_node(state: ResearchState) -> dict:
+    """Search private knowledge base for relevant document chunks."""
+    from app.services.ingestion_service import search_documents, format_document_context
+ 
+    doc_chunks = await search_documents(state["query"], top_k=5)
+    doc_context = format_document_context(doc_chunks)
+ 
+    logger.info("docs_retrieved", chunks=len(doc_chunks), query=state["query"][:50])
+    step = {
+        "type": "retrieve_docs",
+        "iteration": state.get("iteration_count", 0) + 1,
+        "content": f"Retrieved {len(doc_chunks)} private document chunks from knowledge base",
+        "chunks_found": len(doc_chunks),
+    }
+    return {"doc_context": doc_context, "steps": [step]}
+
 async def synthesize_node(state: ResearchState) -> dict:
     """Delegate synthesis to SynthesizeAgent subgraph."""
     from app.agents.synthesize_agent import run_synthesize_agent
@@ -322,12 +338,15 @@ def build_research_graph():
     graph.add_node("plan", plan_node)
     graph.add_node("search", search_node)
     graph.add_node("scrape", scrape_node)
+    graph.add_node("retrieve_docs", retrieve_docs_node)
     graph.add_node("synthesize", synthesize_node)
     graph.add_node("evaluate", evaluate_node)
 
     graph.set_entry_point("plan")
     graph.add_edge("plan", "search")
     graph.add_edge("search", "scrape")
+    graph.add_edge("scrape", "retrieve_docs")
+    graph.add_edge("retrieve_docs", "synthesize") 
     graph.add_edge("scrape", "synthesize")
     graph.add_edge("synthesize", "evaluate")
     graph.add_conditional_edges(
