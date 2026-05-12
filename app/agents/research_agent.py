@@ -25,13 +25,12 @@ from app.core.logging import get_logger
 from app.models.research import EvaluationResult
 from app.tools.search import search_web
 from app.tools.scraper import scrape_url
+from app.agents.constants import get_depth_config
 
 settings = get_settings()
 logger = get_logger(__name__)
 
 MAX_ITERATIONS = 3
-
-from app.agents.constants import get_depth_config
 
 
 # ── Orchestrator state ────────────────────────────────────────────────────────
