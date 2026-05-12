@@ -1,4 +1,5 @@
 # Autonomous Research Agent API
+![CI](https://github.com/junlingsun/research-agent/actions/workflows/ci.yml/badge.svg)
 
 A production-ready multi-agent research platform built with FastAPI and LangGraph. Submit a research query and receive a structured, cited report synthesized from live web search and your private knowledge base.
 
