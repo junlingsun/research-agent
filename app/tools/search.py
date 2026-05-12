@@ -31,7 +31,6 @@ async def search_web(query: str, max_results: int = 5) -> list[dict]:
 )
 async def _tavily_search(query: str, max_results: int) -> list[dict]:
     """Search using Tavily API."""
-    print(f"[TAVILY] Searching: {query}", flush=True)
     async with httpx.AsyncClient(timeout=20.0) as client:
         resp = await client.post(
             "https://api.tavily.com/search",
@@ -54,7 +53,6 @@ async def _tavily_search(query: str, max_results: int) -> list[dict]:
             "url": r.get("url", ""),
             "snippet": r.get("content", ""),
         })
-    print(f"[TAVILY] Got {len(results)} results for: {query}", flush=True)
     logger.info("tavily_search_complete", query=query, count=len(results))
     return results
 
@@ -67,7 +65,6 @@ async def _tavily_search(query: str, max_results: int) -> list[dict]:
 )
 async def _duckduckgo_search(query: str, max_results: int) -> list[dict]:
     """Fallback search using DuckDuckGo."""
-    print(f"[DDG] Searching: {query}", flush=True)
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(
             "https://api.duckduckgo.com/",
@@ -84,7 +81,6 @@ async def _duckduckgo_search(query: str, max_results: int) -> list[dict]:
                 "url": topic["FirstURL"],
                 "snippet": topic.get("Text", ""),
             })
-    print(f"[DDG] Got {len(results)} results for: {query}", flush=True)
     return results
 
 
