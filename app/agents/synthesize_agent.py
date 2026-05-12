@@ -7,9 +7,9 @@ Internal loop:
 The agent critiques its own draft before returning to the orchestrator,
 reducing how often the outer evaluator loop needs to trigger.
 """
+
 from __future__ import annotations
 
-import json
 import operator
 from typing import Annotated, TypedDict
 
@@ -28,14 +28,15 @@ MAX_REVISIONS = 2
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+
 class DraftCritique(BaseModel):
     """Structured output for the self-critique node."""
+
     is_good_enough: bool = Field(
         description="True if the draft comprehensively answers the question with citations"
     )
     score: float = Field(
-        ge=0.0, le=1.0,
-        description="Quality score: 0.7+ means good enough"
+        ge=0.0, le=1.0, description="Quality score: 0.7+ means good enough"
     )
     issues: list[str] = Field(
         description="Specific issues with the current draft. Empty if is_good_enough."
@@ -47,6 +48,7 @@ class DraftCritique(BaseModel):
 
 class ResearchDraft(BaseModel):
     """Structured output for draft and revise nodes."""
+
     summary: str = Field(
         description="2-3 paragraph comprehensive answer grounded in sources"
     )
@@ -57,18 +59,18 @@ class ResearchDraft(BaseModel):
         description="Sources referenced, each with url, title, snippet"
     )
     confidence_score: float = Field(
-        ge=0.0, le=1.0,
-        description="Honest assessment of source quality and coverage"
+        ge=0.0, le=1.0, description="Honest assessment of source quality and coverage"
     )
 
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
+
 class SynthesizeState(TypedDict):
     # Inputs from orchestrator
     query: str
     scraped_content: list[dict]
-    evaluation_feedback: str        # gaps from outer evaluator on retry
+    evaluation_feedback: str  # gaps from outer evaluator on retry
 
     # Internal state
     current_draft: dict | None
@@ -82,15 +84,18 @@ class SynthesizeState(TypedDict):
 
 # ── LLM factory ───────────────────────────────────────────────────────────────
 
+
 def _get_llm():
     if settings.llm_provider == "groq":
         from langchain_groq import ChatGroq
+
         return ChatGroq(
             model=settings.llm_model,
             api_key=settings.groq_api_key,
             temperature=0.1,
         )
     from langchain_openai import ChatOpenAI
+
     return ChatOpenAI(
         model=settings.llm_model,
         api_key=settings.openai_api_key,
@@ -113,6 +118,7 @@ def _build_context(scraped_content: list[dict]) -> str:
 
 # ── Nodes ─────────────────────────────────────────────────────────────────────
 
+
 async def draft_node(state: SynthesizeState) -> dict:
     """Write an initial research report draft from all scraped sources."""
     context = _build_context(state["scraped_content"])
@@ -126,7 +132,8 @@ async def draft_node(state: SynthesizeState) -> dict:
             f"Make sure your draft specifically addresses these gaps."
         )
 
-    system = SystemMessage(content="""
+    system = SystemMessage(
+        content="""
 You are an expert research synthesizer at a professional research firm.
 
 Synthesis rules:
@@ -139,14 +146,17 @@ Synthesis rules:
       0.0-0.4: sources are weak, off-topic, or sparse
       0.4-0.7: sources partially answer the question
       0.7-1.0: sources comprehensively answer the question
-""")
+"""
+    )
 
-    user = HumanMessage(content=(
-        f"Research question: {state['query']}\n\n"
-        f"Sources ({len(state['scraped_content'])} total):\n"
-        f"{context}"
-        f"{feedback_section}"
-    ))
+    user = HumanMessage(
+        content=(
+            f"Research question: {state['query']}\n\n"
+            f"Sources ({len(state['scraped_content'])} total):\n"
+            f"{context}"
+            f"{feedback_section}"
+        )
+    )
 
     structured_llm = _get_llm().with_structured_output(ResearchDraft)
     draft: ResearchDraft = await structured_llm.ainvoke([system, user])
@@ -168,7 +178,8 @@ async def self_critique_node(state: SynthesizeState) -> dict:
     """Critically evaluate the current draft against the research question."""
     draft = state["current_draft"]
 
-    system = SystemMessage(content="""
+    system = SystemMessage(
+        content="""
 You are a strict research editor. Evaluate this draft critically.
 
 Check:
@@ -180,16 +191,19 @@ Check:
 
 Be strict — approve only if the draft is genuinely comprehensive.
 Score >= 0.75 and no critical missing aspects = is_good_enough: true
-""")
+"""
+    )
 
-    user = HumanMessage(content=(
-        f"Research question: {state['query']}\n\n"
-        f"Draft to evaluate:\n"
-        f"Summary: {draft.get('summary', '')}\n\n"
-        f"Key findings: {draft.get('key_findings', [])}\n\n"
-        f"Citations: {[c.get('url') for c in draft.get('citations', [])]}\n"
-        f"Confidence claimed: {draft.get('confidence_score', 0)}"
-    ))
+    user = HumanMessage(
+        content=(
+            f"Research question: {state['query']}\n\n"
+            f"Draft to evaluate:\n"
+            f"Summary: {draft.get('summary', '')}\n\n"
+            f"Key findings: {draft.get('key_findings', [])}\n\n"
+            f"Citations: {[c.get('url') for c in draft.get('citations', [])]}\n"
+            f"Confidence claimed: {draft.get('confidence_score', 0)}"
+        )
+    )
 
     structured_llm = _get_llm().with_structured_output(DraftCritique)
     critique: DraftCritique = await structured_llm.ainvoke([system, user])
@@ -217,28 +231,34 @@ async def revise_node(state: SynthesizeState) -> dict:
     critique = state["critique"]
     current_draft = state["current_draft"]
 
-    system = SystemMessage(content="""
+    system = SystemMessage(
+        content="""
 You are an expert research synthesizer revising a draft based on editorial feedback.
 Apply the critique precisely. Address every identified issue and missing aspect.
 Stay grounded in the provided sources — do not hallucinate new information.
-""")
+"""
+    )
 
-    user = HumanMessage(content=(
-        f"Research question: {state['query']}\n\n"
-        f"Current draft summary:\n{current_draft.get('summary', '')}\n\n"
-        f"Critique issues:\n"
-        + "\n".join(f"  - {issue}" for issue in critique.issues)
-        + f"\n\nMissing aspects to address:\n"
-        + "\n".join(f"  - {aspect}" for aspect in critique.missing_aspects)
-        + f"\n\nSources to draw from:\n{context}\n\n"
-        "Write an improved version addressing all issues."
-    ))
+    user = HumanMessage(
+        content=(
+            f"Research question: {state['query']}\n\n"
+            f"Current draft summary:\n{current_draft.get('summary', '')}\n\n"
+            f"Critique issues:\n"
+            + "\n".join(f"  - {issue}" for issue in critique.issues)
+            + "\n\nMissing aspects to address:\n"
+            + "\n".join(f"  - {aspect}" for aspect in critique.missing_aspects)
+            + f"\n\nSources to draw from:\n{context}\n\n"
+            "Write an improved version addressing all issues."
+        )
+    )
 
     structured_llm = _get_llm().with_structured_output(ResearchDraft)
     revised: ResearchDraft = await structured_llm.ainvoke([system, user])
 
     revision = state["revision_count"] + 1
-    logger.info("synthesize_revise", revision=revision, confidence=revised.confidence_score)
+    logger.info(
+        "synthesize_revise", revision=revision, confidence=revised.confidence_score
+    )
     step = {
         "type": "synthesize_revise",
         "revision": revision,
@@ -273,19 +293,22 @@ async def finalize_node(state: SynthesizeState) -> dict:
 
 # ── Routing ───────────────────────────────────────────────────────────────────
 
+
 def route_after_critique(state: SynthesizeState) -> str:
     """Approve draft or send for revision — with revision cap."""
     from app.agents.constants import get_depth_config
-    
+
     critique = state.get("critique")
     revision_count = state.get("revision_count", 0)
 
-    max_revisions = get_depth_config(state.get("depth", "standard")).get("max_revisions", MAX_REVISIONS)
+    max_revisions = get_depth_config(state.get("depth", "standard")).get(
+        "max_revisions", MAX_REVISIONS
+    )
 
     # Always check quality first
     if critique and critique.is_good_enough:
         return "finalize"
-    
+
     # Circuit breaker
     if revision_count >= max_revisions:
         logger.info("synthesize_circuit_breaker", revision_count=revision_count)
@@ -295,6 +318,7 @@ def route_after_critique(state: SynthesizeState) -> str:
 
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
+
 
 def build_synthesize_agent() -> StateGraph:
     graph = StateGraph(SynthesizeState)
@@ -312,9 +336,9 @@ def build_synthesize_agent() -> StateGraph:
         {
             "finalize": "finalize_draft",
             "revise": "revise_draft",
-        }
+        },
     )
-    graph.add_edge("revise_draft", "critique_draft")   # internal loop
+    graph.add_edge("revise_draft", "critique_draft")  # internal loop
     graph.add_edge("finalize_draft", END)
 
     return graph.compile()
@@ -325,6 +349,7 @@ synthesize_agent = build_synthesize_agent()
 
 
 # ── Public interface ──────────────────────────────────────────────────────────
+
 
 async def run_synthesize_agent(
     query: str,

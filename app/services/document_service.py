@@ -33,9 +33,7 @@ async def update_document_status(
     chunk_count: int = 0,
     error_message: str | None = None,
 ) -> Document | None:
-    result = await db.execute(
-        select(Document).where(Document.id == document_id)
-    )
+    result = await db.execute(select(Document).where(Document.id == document_id))
     doc = result.scalar_one_or_none()
     if not doc:
         return None
@@ -51,9 +49,7 @@ async def get_document(
     db: AsyncSession,
     document_id: uuid.UUID,
 ) -> Document | None:
-    result = await db.execute(
-        select(Document).where(Document.id == document_id)
-    )
+    result = await db.execute(select(Document).where(Document.id == document_id))
     return result.scalar_one_or_none()
 
 

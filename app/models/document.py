@@ -9,6 +9,7 @@ from app.db.base import Base
 
 # ── SQLAlchemy model ──────────────────────────────────────────────────────────
 
+
 class Document(Base):
     __tablename__ = "documents"
 
@@ -27,9 +28,7 @@ class Document(Base):
         String(50), default="processing"
     )  # "processing" | "ready" | "failed"
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata_: Mapped[dict] = mapped_column(
-        "metadata", JSONB, default=dict
-    )
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -39,6 +38,7 @@ class Document(Base):
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
+
 
 class DocumentResponse(BaseModel):
     id: uuid.UUID

@@ -2,8 +2,14 @@
 Web search tool using Tavily — purpose-built for AI agents.
 Falls back to DuckDuckGo if no Tavily API key is configured.
 """
+
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 from langchain_core.tools import tool
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -48,11 +54,13 @@ async def _tavily_search(query: str, max_results: int) -> list[dict]:
 
     results = []
     for r in data.get("results", []):
-        results.append({
-            "title": r.get("title", ""),
-            "url": r.get("url", ""),
-            "snippet": r.get("content", ""),
-        })
+        results.append(
+            {
+                "title": r.get("title", ""),
+                "url": r.get("url", ""),
+                "snippet": r.get("content", ""),
+            }
+        )
     logger.info("tavily_search_complete", query=query, count=len(results))
     return results
 
@@ -76,11 +84,13 @@ async def _duckduckgo_search(query: str, max_results: int) -> list[dict]:
     results = []
     for topic in data.get("RelatedTopics", [])[:max_results]:
         if "Text" in topic and "FirstURL" in topic:
-            results.append({
-                "title": topic.get("Text", "")[:100],
-                "url": topic["FirstURL"],
-                "snippet": topic.get("Text", ""),
-            })
+            results.append(
+                {
+                    "title": topic.get("Text", "")[:100],
+                    "url": topic["FirstURL"],
+                    "snippet": topic.get("Text", ""),
+                }
+            )
     return results
 
 
@@ -97,9 +107,7 @@ async def web_search(query: str, max_results: int = 5) -> str:
         formatted = []
         for i, r in enumerate(results, 1):
             formatted.append(
-                f"[{i}] {r['title']}\n"
-                f"    URL: {r['url']}\n"
-                f"    {r['snippet']}\n"
+                f"[{i}] {r['title']}\n" f"    URL: {r['url']}\n" f"    {r['snippet']}\n"
             )
         return "\n".join(formatted)
     except Exception as e:

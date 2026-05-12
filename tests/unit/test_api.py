@@ -1,4 +1,5 @@
 """Integration tests for Research and Document API endpoints."""
+
 import uuid
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,6 +12,7 @@ HEADERS = {"X-API-Key": API_KEY}
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def mock_job():
@@ -32,17 +34,26 @@ def mock_completed_job(mock_job):
     result = MagicMock()
     result.summary = "Quantum computing uses qubits."
     result.key_findings = ["Finding 1", "Finding 2"]
-    result.citations = [{"url": "https://example.com", "title": "Example", "snippet": "snippet"}]
+    result.citations = [
+        {"url": "https://example.com", "title": "Example", "snippet": "snippet"}
+    ]
     result.confidence_score = 0.85
     result.sources_scraped = 5
     result.agent_steps = [
-        {"type": "evaluation", "iteration": 1, "score": 0.85, "approved": True, "gaps": []}
+        {
+            "type": "evaluation",
+            "iteration": 1,
+            "score": 0.85,
+            "approved": True,
+            "gaps": [],
+        }
     ]
     mock_job.result = result
     return mock_job
 
 
 # ── Health endpoint ───────────────────────────────────────────────────────────
+
 
 class TestHealthEndpoint:
     @pytest.mark.asyncio
@@ -74,6 +85,7 @@ class TestHealthEndpoint:
 
 
 # ── Research endpoints ────────────────────────────────────────────────────────
+
 
 class TestSubmitResearch:
     @pytest.mark.asyncio
@@ -114,8 +126,13 @@ class TestSubmitResearch:
     @pytest.mark.asyncio
     async def test_accepts_valid_request(self, mock_job):
         with (
-            patch("app.api.routes.research.get_cached_result", AsyncMock(return_value=None)),
-            patch("app.api.routes.research.create_job", AsyncMock(return_value=mock_job)),
+            patch(
+                "app.api.routes.research.get_cached_result",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.api.routes.research.create_job", AsyncMock(return_value=mock_job)
+            ),
             patch("app.api.routes.research.run_research_task") as mock_task,
             patch("app.db.session.get_db"),
         ):
@@ -126,8 +143,10 @@ class TestSubmitResearch:
             ) as client:
                 response = await client.post(
                     "/api/v1/research",
-                    json={"query": "What are the latest advancements in AI research?",
-                          "depth": "quick"},
+                    json={
+                        "query": "What are the latest advancements in AI research?",
+                        "depth": "quick",
+                    },
                     headers=HEADERS,
                 )
 
@@ -157,8 +176,10 @@ class TestGetResearch:
 
     @pytest.mark.asyncio
     async def test_returns_job_with_result(self, mock_completed_job):
-        with patch("app.api.routes.research.get_job",
-                   AsyncMock(return_value=mock_completed_job)):
+        with patch(
+            "app.api.routes.research.get_job",
+            AsyncMock(return_value=mock_completed_job),
+        ):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -177,6 +198,7 @@ class TestGetResearch:
 
 # ── Document endpoints ────────────────────────────────────────────────────────
 
+
 class TestDocumentEndpoints:
     @pytest.mark.asyncio
     async def test_list_documents_requires_auth(self):
@@ -188,8 +210,9 @@ class TestDocumentEndpoints:
 
     @pytest.mark.asyncio
     async def test_list_documents_returns_list(self):
-        with patch("app.api.routes.documents.list_documents",
-                   AsyncMock(return_value=([], 0))):
+        with patch(
+            "app.api.routes.documents.list_documents", AsyncMock(return_value=([], 0))
+        ):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -203,8 +226,9 @@ class TestDocumentEndpoints:
 
     @pytest.mark.asyncio
     async def test_get_document_404_for_unknown(self):
-        with patch("app.api.routes.documents.get_document",
-                   AsyncMock(return_value=None)):
+        with patch(
+            "app.api.routes.documents.get_document", AsyncMock(return_value=None)
+        ):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -217,8 +241,24 @@ class TestDocumentEndpoints:
     @pytest.mark.asyncio
     async def test_ingest_url_rejects_invalid_url(self):
         with (
-            patch("app.api.routes.documents.create_document", AsyncMock(return_value=MagicMock(id=uuid.uuid4(), title="test", source_type="url", source_ref="not-a-url", chunk_count=0, status="failed", created_at=MagicMock()))),
-            patch("app.api.routes.documents.extract_from_url", AsyncMock(side_effect=Exception("Invalid URL"))),
+            patch(
+                "app.api.routes.documents.create_document",
+                AsyncMock(
+                    return_value=MagicMock(
+                        id=uuid.uuid4(),
+                        title="test",
+                        source_type="url",
+                        source_ref="not-a-url",
+                        chunk_count=0,
+                        status="failed",
+                        created_at=MagicMock(),
+                    )
+                ),
+            ),
+            patch(
+                "app.api.routes.documents.extract_from_url",
+                AsyncMock(side_effect=Exception("Invalid URL")),
+            ),
             patch("app.api.routes.documents.update_document_status", AsyncMock()),
             patch("app.db.session.get_db"),
         ):
@@ -242,8 +282,9 @@ class TestDocumentEndpoints:
 
     @pytest.mark.asyncio
     async def test_document_search_returns_results(self):
-        with patch("app.api.routes.documents.search_documents",
-                   AsyncMock(return_value=[])):
+        with patch(
+            "app.api.routes.documents.search_documents", AsyncMock(return_value=[])
+        ):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -256,6 +297,7 @@ class TestDocumentEndpoints:
 
 
 # ── Request validation tests ──────────────────────────────────────────────────
+
 
 class TestRequestValidation:
     @pytest.mark.asyncio

@@ -11,6 +11,7 @@ Flow:
 PlanAgent:      generate → critique → refine (internal loop)
 SynthesizeAgent: draft → self_critique → revise (internal loop)
 """
+
 from __future__ import annotations
 
 import operator
@@ -18,7 +19,6 @@ from typing import Annotated, TypedDict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph import END, StateGraph
-from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -36,6 +36,7 @@ from app.agents.constants import get_depth_config
 
 # ── Orchestrator state ────────────────────────────────────────────────────────
 
+
 class ResearchState(TypedDict):
     query: str
     depth: str
@@ -52,15 +53,18 @@ class ResearchState(TypedDict):
 
 # ── LLM factory ───────────────────────────────────────────────────────────────
 
+
 def _get_llm():
     if settings.llm_provider == "groq":
         from langchain_groq import ChatGroq
+
         return ChatGroq(
             model=settings.llm_model,
             api_key=settings.groq_api_key,
             temperature=0.1,
         )
     from langchain_openai import ChatOpenAI
+
     return ChatOpenAI(
         model=settings.llm_model,
         api_key=settings.openai_api_key,
@@ -70,6 +74,7 @@ def _get_llm():
 
 
 # ── Orchestrator nodes ────────────────────────────────────────────────────────
+
 
 async def plan_node(state: ResearchState) -> dict:
     """Delegate query planning to PlanAgent subgraph."""
@@ -88,7 +93,9 @@ async def plan_node(state: ResearchState) -> dict:
         evaluation_feedback=evaluation_feedback,
     )
 
-    logger.info("plan_complete", queries=queries, iteration=state.get("iteration_count", 0))
+    logger.info(
+        "plan_complete", queries=queries, iteration=state.get("iteration_count", 0)
+    )
     step = {
         "type": "planning",
         "iteration": state.get("iteration_count", 0) + 1,
@@ -102,6 +109,7 @@ async def plan_node(state: ResearchState) -> dict:
 async def search_node(state: ResearchState) -> dict:
     """Run all planned queries, skipping already-seen URLs."""
     import asyncio
+
     seen_urls = state.get("seen_urls", set())
     all_results: list[dict] = []
     start_time = asyncio.get_event_loop().time()
@@ -129,11 +137,11 @@ async def search_node(state: ResearchState) -> dict:
     elapsed = asyncio.get_event_loop().time() - start_time
     skipped = len(all_results) - len(unique_results)
     logger.info(
-        "search_complete", 
-        new_sources=len(unique_results), 
+        "search_complete",
+        new_sources=len(unique_results),
         skipped=skipped,
         elapsed_seconds=round(elapsed, 2),
-        queries=len(state["search_queries"])
+        queries=len(state["search_queries"]),
     )
 
     step = {
@@ -151,11 +159,13 @@ async def search_node(state: ResearchState) -> dict:
 async def scrape_node(state: ResearchState) -> dict:
     """Scrape top N new URLs."""
     import asyncio
+
     cfg = get_depth_config(state["depth"])
-    sources_to_scrape = state["search_results"][:cfg["max_sources"]]
+    sources_to_scrape = state["search_results"][: cfg["max_sources"]]
     start_time = asyncio.get_event_loop().time()
 
     scraped: list[dict] = []
+
     async def scrape_one(source: dict) -> dict:
         content = await scrape_url.ainvoke({"url": source["url"]})
         return {
@@ -164,7 +174,7 @@ async def scrape_node(state: ResearchState) -> dict:
             "snippet": source["snippet"],
             "content": content,
         }
-    
+
     # Scrape all URLs simultaneously
     results = await asyncio.gather(
         *[scrape_one(source) for source in sources_to_scrape],
@@ -176,11 +186,11 @@ async def scrape_node(state: ResearchState) -> dict:
             logger.warning("scrape_failed", url=source["url"], error=str(result))
         else:
             scraped.append(result)
- 
+
     elapsed = asyncio.get_event_loop().time() - start_time
 
     logger.info(
-        "scrape_complete", 
+        "scrape_complete",
         scraped_count=len(scraped),
         failed=len(sources_to_scrape) - len(scraped),
         elapsed_seconds=round(elapsed, 2),
@@ -197,10 +207,10 @@ async def scrape_node(state: ResearchState) -> dict:
 async def retrieve_docs_node(state: ResearchState) -> dict:
     """Search private knowledge base for relevant document chunks."""
     from app.services.ingestion_service import search_documents, format_document_context
- 
+
     doc_chunks = await search_documents(state["query"], top_k=5)
     doc_context = format_document_context(doc_chunks)
- 
+
     logger.info("docs_retrieved", chunks=len(doc_chunks), query=state["query"][:50])
     step = {
         "type": "retrieve_docs",
@@ -209,6 +219,7 @@ async def retrieve_docs_node(state: ResearchState) -> dict:
         "chunks_found": len(doc_chunks),
     }
     return {"doc_context": doc_context, "steps": [step]}
+
 
 async def synthesize_node(state: ResearchState) -> dict:
     """Delegate synthesis to SynthesizeAgent subgraph."""
@@ -234,7 +245,9 @@ async def synthesize_node(state: ResearchState) -> dict:
         "synthesis_complete",
         confidence=report.get("confidence_score"),
         iteration=state.get("iteration_count", 0),
-        internal_revisions=len([s for s in internal_steps if s["type"] == "synthesize_revise"]),
+        internal_revisions=len(
+            [s for s in internal_steps if s["type"] == "synthesize_revise"]
+        ),
     )
     step = {
         "type": "synthesis",
@@ -253,7 +266,8 @@ async def evaluate_node(state: ResearchState) -> dict:
     report = state.get("final_report", {})
     iteration = state.get("iteration_count", 0)
 
-    system = SystemMessage(content="""
+    system = SystemMessage(
+        content="""
 You are a strict research quality editor. Find weaknesses, not praise.
 
 Evaluation criteria:
@@ -271,16 +285,19 @@ Scoring:
 approved = true only if score >= 0.7
 If approved, gaps and feedback must be empty strings/lists.
 Be specific in gaps — not "needs more detail" but "missing IBM quantum roadmap post-2024"
-""")
+"""
+    )
 
-    user = HumanMessage(content=(
-        f"Research question: {state['query']}\n\n"
-        f"Report (iteration {iteration + 1}):\n"
-        f"Summary: {report.get('summary', '')}\n\n"
-        f"Key findings: {report.get('key_findings', [])}\n\n"
-        f"Citations: {[c.get('url') for c in report.get('citations', [])]}\n"
-        f"Confidence claimed: {report.get('confidence_score', 0)}"
-    ))
+    user = HumanMessage(
+        content=(
+            f"Research question: {state['query']}\n\n"
+            f"Report (iteration {iteration + 1}):\n"
+            f"Summary: {report.get('summary', '')}\n\n"
+            f"Key findings: {report.get('key_findings', [])}\n\n"
+            f"Citations: {[c.get('url') for c in report.get('citations', [])]}\n"
+            f"Confidence claimed: {report.get('confidence_score', 0)}"
+        )
+    )
 
     structured_llm = _get_llm().with_structured_output(EvaluationResult)
     evaluation: EvaluationResult = await structured_llm.ainvoke([system, user])
@@ -310,6 +327,7 @@ Be specific in gaps — not "needs more detail" but "missing IBM quantum roadmap
 
 # ── Routing ───────────────────────────────────────────────────────────────────
 
+
 def route_after_evaluation(state: ResearchState) -> str:
     evaluation = state.get("evaluation", {})
     iteration = state.get("iteration_count", 0)
@@ -332,6 +350,7 @@ def route_after_evaluation(state: ResearchState) -> str:
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
 
+
 def build_research_graph():
     graph = StateGraph(ResearchState)
 
@@ -346,7 +365,7 @@ def build_research_graph():
     graph.add_edge("plan", "search")
     graph.add_edge("search", "scrape")
     graph.add_edge("scrape", "retrieve_docs")
-    graph.add_edge("retrieve_docs", "synthesize") 
+    graph.add_edge("retrieve_docs", "synthesize")
     graph.add_edge("scrape", "synthesize")
     graph.add_edge("synthesize", "evaluate")
     graph.add_conditional_edges(
@@ -355,7 +374,7 @@ def build_research_graph():
         {
             "approved": END,
             "retry": "plan",
-        }
+        },
     )
 
     return graph.compile()
@@ -366,6 +385,7 @@ research_graph = build_research_graph()
 
 
 # ── Public interface ──────────────────────────────────────────────────────────
+
 
 async def run_research_agent(
     query: str,

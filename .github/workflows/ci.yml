@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: "1.8.3"
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache Poetry venv
+        uses: actions/cache@v4
+        id: cached-poetry-dependencies
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction
+
+      - name: Run unit tests
+        env:
+          OPENAI_API_KEY: sk-test-key
+          GROQ_API_KEY: gsk-test-key
+          SECRET_KEY: test-secret-key-32-chars-long-xx
+          LLM_PROVIDER: groq
+          LLM_MODEL: llama-3.3-70b-versatile
+          TAVILY_API_KEY: tvly-test-key
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/research_agent_test
+          REDIS_URL: redis://localhost:6379/0
+          QDRANT_URL: http://localhost:6333
+          ENVIRONMENT: test
+        run: poetry run pytest tests/unit/ -v --tb=short
+
+      - name: Run integration tests
+        env:
+          OPENAI_API_KEY: sk-test-key
+          GROQ_API_KEY: gsk-test-key
+          SECRET_KEY: test-secret-key-32-chars-long-xx
+          LLM_PROVIDER: groq
+          LLM_MODEL: llama-3.3-70b-versatile
+          TAVILY_API_KEY: tvly-test-key
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/research_agent_test
+          REDIS_URL: redis://localhost:6379/0
+          QDRANT_URL: http://localhost:6333
+          ENVIRONMENT: test
+        run: poetry run pytest tests/integration/ -v --tb=short
+
+      - name: Generate coverage report
+        env:
+          OPENAI_API_KEY: sk-test-key
+          GROQ_API_KEY: gsk-test-key
+          SECRET_KEY: test-secret-key-32-chars-long-xx
+          LLM_PROVIDER: groq
+          LLM_MODEL: llama-3.3-70b-versatile
+          TAVILY_API_KEY: tvly-test-key
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/research_agent_test
+          REDIS_URL: redis://localhost:6379/0
+          QDRANT_URL: http://localhost:6333
+          ENVIRONMENT: test
+        run: |
+          poetry run pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing -q
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: "1.8.3"
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Run ruff linter
+        run: poetry run ruff check app/ tests/
+
+      - name: Check ruff formatting
+        run: poetry run ruff format --check app/ tests/

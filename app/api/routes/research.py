@@ -9,7 +9,7 @@ import json
 
 from app.core.security import require_api_key
 from app.db.session import get_db
-from app.models.job import JobStatus, ResearchDepth
+from app.models.job import JobStatus
 from app.models.research import (
     AgentStepEvent,
     JobCreatedResponse,
@@ -49,8 +49,11 @@ async def submit_research(
         # Create a pre-completed job for the cached result
         job = await create_job(db, request.query, request.depth)
         from app.services.job_service import update_job_status, save_result
+
         await update_job_status(db, job.id, JobStatus.COMPLETED)
-        await save_result(db, job.id, cached, [{"type": "cache_hit", "content": "Result from cache"}])
+        await save_result(
+            db, job.id, cached, [{"type": "cache_hit", "content": "Result from cache"}]
+        )
         await db.commit()
         logger.info("cache_hit_job", job_id=str(job.id))
         return JobCreatedResponse(
@@ -132,7 +135,7 @@ async def stream_research(
 
     async def event_generator() -> AsyncGenerator[str, None]:
         poll_interval = 1.5  # seconds between DB polls
-        timeout = 200        # max seconds to wait
+        timeout = 200  # max seconds to wait
         elapsed = 0
         last_step_count = 0
 
@@ -154,7 +157,11 @@ async def stream_research(
                         step=steps.index(step) + 1,
                         type=step.get("type", "reasoning"),
                         content=step.get("content", ""),
-                        metadata={k: v for k, v in step.items() if k not in ("type", "content")},
+                        metadata={
+                            k: v
+                            for k, v in step.items()
+                            if k not in ("type", "content")
+                        },
                     )
                     yield f"data: {event.model_dump_json()}\n\n"
                 last_step_count = len(steps)
@@ -181,7 +188,7 @@ async def stream_research(
                 break
 
             # Heartbeat to keep connection alive
-            yield f": heartbeat\n\n"
+            yield ": heartbeat\n\n"
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
 

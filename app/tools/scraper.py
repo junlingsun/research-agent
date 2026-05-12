@@ -1,10 +1,16 @@
 """
 URL scraping tool: fetches a URL, strips HTML, returns clean text.
 """
+
 import re
 import httpx
 from bs4 import BeautifulSoup
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 from langchain_core.tools import tool
 from app.core.logging import get_logger
 

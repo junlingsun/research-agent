@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     environment: str = "production"
 
     # LLM provider
-    llm_provider:str ="groq"
-    llm_model:str = "Llama-3.3-70B-Versatile"
+    llm_provider: str = "groq"
+    llm_model: str = "Llama-3.3-70B-Versatile"
 
     # API Keys
     openai_api_key: str
@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     api_key_header: str = "X-API-Key"
 
     # Database
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/research_agent"
+    database_url: str = (
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/research_agent"
+    )
 
     # Redis / Celery
     redis_url: str = "redis://localhost:6379/0"

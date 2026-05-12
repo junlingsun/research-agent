@@ -71,6 +71,7 @@ async def log_requests(request: Request, call_next):  # type: ignore[no-untyped-
 
 # ── Global exception handler ──────────────────────────────────────────────────
 
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger = get_logger("error")

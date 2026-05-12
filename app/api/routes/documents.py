@@ -23,7 +23,6 @@ from app.services.ingestion_service import (
     delete_document_chunks,
     extract_from_pdf,
     extract_from_url,
-    format_document_context,
     ingest_chunks,
     search_documents,
 )

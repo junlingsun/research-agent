@@ -9,6 +9,7 @@ Handles three source types:
 Chunks stored in Qdrant collection "document_chunks".
 Document metadata stored in Postgres.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -59,9 +60,11 @@ async def ensure_collection() -> None:
 
 # ── Embedding ─────────────────────────────────────────────────────────────────
 
+
 async def embed_texts(texts: list[str]) -> list[list[float]]:
     """Batch embed multiple texts."""
     from langchain_openai import OpenAIEmbeddings
+
     embeddings = OpenAIEmbeddings(
         model=settings.embedding_model,
         api_key=settings.openai_api_key,
@@ -77,10 +80,13 @@ async def embed_text(text: str) -> list[float]:
 
 # ── Text chunking ─────────────────────────────────────────────────────────────
 
-def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
+
+def chunk_text(
+    text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP
+) -> list[str]:
     """Split text into overlapping chunks on paragraph/sentence boundaries."""
-    text = re.sub(r'\n{3,}', '\n\n', text.strip())
-    text = re.sub(r' {2,}', ' ', text)
+    text = re.sub(r"\n{3,}", "\n\n", text.strip())
+    text = re.sub(r" {2,}", " ", text)
 
     if len(text) <= chunk_size:
         return [text]
@@ -95,11 +101,11 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
             chunks.append(text[start:])
             break
 
-        paragraph_break = text.rfind('\n\n', start, end)
+        paragraph_break = text.rfind("\n\n", start, end)
         if paragraph_break > start + chunk_size // 2:
             end = paragraph_break
         else:
-            sentence_break = text.rfind('. ', start, end)
+            sentence_break = text.rfind(". ", start, end)
             if sentence_break > start + chunk_size // 2:
                 end = sentence_break + 1
 
@@ -110,6 +116,7 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
 
 
 # ── Source extractors ─────────────────────────────────────────────────────────
+
 
 async def extract_from_url(url: str) -> str:
     """Scrape and extract clean text from a URL."""
@@ -124,7 +131,7 @@ async def extract_from_url(url: str) -> str:
         tag.decompose()
 
     text = soup.get_text(separator="\n")
-    text = re.sub(r'\n{3,}', '\n\n', text).strip()
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
     return text[:50000]
 
 
@@ -133,6 +140,7 @@ async def extract_from_pdf(pdf_bytes: bytes) -> str:
     try:
         import pypdf
         import io
+
         reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
         pages = [page.extract_text() or "" for page in reader.pages]
         return "\n\n".join(pages)
@@ -141,6 +149,7 @@ async def extract_from_pdf(pdf_bytes: bytes) -> str:
 
 
 # ── Core ingestion ────────────────────────────────────────────────────────────
+
 
 def _chunk_point_id(document_id: uuid.UUID, chunk_index: int) -> str:
     """Deterministic point ID for a chunk."""
@@ -163,24 +172,26 @@ async def ingest_chunks(
     points = []
     for i, (chunk, vector) in enumerate(zip(chunks, vectors)):
         point_id = _chunk_point_id(document_id, i)
-        points.append(PointStruct(
-            id=point_id,
-            vector=vector,
-            payload={
-                "document_id": str(document_id),
-                "title": title,
-                "source_ref": source_ref,
-                "chunk_index": i,
-                "chunk": chunk,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            },
-        ))
+        points.append(
+            PointStruct(
+                id=point_id,
+                vector=vector,
+                payload={
+                    "document_id": str(document_id),
+                    "title": title,
+                    "source_ref": source_ref,
+                    "chunk_index": i,
+                    "chunk": chunk,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        )
 
     batch_size = 100
     for i in range(0, len(points), batch_size):
         await client.upsert(
             collection_name=DOCUMENT_COLLECTION,
-            points=points[i:i + batch_size],
+            points=points[i : i + batch_size],
         )
 
     logger.info("chunks_stored", document_id=str(document_id), chunk_count=len(points))
@@ -190,20 +201,23 @@ async def ingest_chunks(
 async def delete_document_chunks(document_id: uuid.UUID) -> None:
     """Delete all chunks for a document from Qdrant."""
     from qdrant_client.models import Filter, FieldCondition, MatchValue
+
     client = get_qdrant_client()
     await client.delete(
         collection_name=DOCUMENT_COLLECTION,
         points_selector=Filter(
-            must=[FieldCondition(
-                key="document_id",
-                match=MatchValue(value=str(document_id))
-            )]
+            must=[
+                FieldCondition(
+                    key="document_id", match=MatchValue(value=str(document_id))
+                )
+            ]
         ),
     )
     logger.info("chunks_deleted", document_id=str(document_id))
 
 
 # ── Document search ───────────────────────────────────────────────────────────
+
 
 async def search_documents(
     query: str,
@@ -228,14 +242,16 @@ async def search_documents(
         chunks = []
         for r in results:
             payload = r.payload or {}
-            chunks.append({
-                "document_id": payload.get("document_id"),
-                "title": payload.get("title", ""),
-                "chunk": payload.get("chunk", ""),
-                "chunk_index": payload.get("chunk_index", 0),
-                "source_ref": payload.get("source_ref"),
-                "score": r.score,
-            })
+            chunks.append(
+                {
+                    "document_id": payload.get("document_id"),
+                    "title": payload.get("title", ""),
+                    "chunk": payload.get("chunk", ""),
+                    "chunk_index": payload.get("chunk_index", 0),
+                    "source_ref": payload.get("source_ref"),
+                    "score": r.score,
+                }
+            )
 
         logger.info("document_search", query=query[:50], results=len(chunks))
         return chunks

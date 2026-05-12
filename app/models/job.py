@@ -15,9 +15,9 @@ class JobStatus(str, enum.Enum):
 
 
 class ResearchDepth(str, enum.Enum):
-    QUICK = "quick"      # 3 sources, ~30s
+    QUICK = "quick"  # 3 sources, ~30s
     STANDARD = "standard"  # 5 sources, ~60s
-    DEEP = "deep"        # 10 sources, ~120s
+    DEEP = "deep"  # 10 sources, ~120s
 
 
 class ResearchJob(Base):

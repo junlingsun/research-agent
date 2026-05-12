@@ -2,6 +2,7 @@
 Celery worker configuration and research task.
 Run with: celery -A app.worker worker --loglevel=info
 """
+
 import asyncio
 import uuid
 
@@ -23,11 +24,11 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
-    task_acks_late=True,               # re-queue if worker dies mid-task
-    worker_prefetch_multiplier=1,      # one task at a time per worker (LLM calls are heavy)
-    task_soft_time_limit=180,          # 3 min soft limit
-    task_time_limit=240,               # 4 min hard limit
-    result_expires=3600,               # keep results for 1 hour
+    task_acks_late=True,  # re-queue if worker dies mid-task
+    worker_prefetch_multiplier=1,  # one task at a time per worker (LLM calls are heavy)
+    task_soft_time_limit=180,  # 3 min soft limit
+    task_time_limit=240,  # 4 min hard limit
+    result_expires=3600,  # keep results for 1 hour
 )
 
 
@@ -53,7 +54,9 @@ def run_research_task(self, job_id: str, query: str, depth: str) -> dict:
             try:
                 # Mark as running
                 await update_job_status(
-                    db, uuid.UUID(job_id), JobStatus.RUNNING,
+                    db,
+                    uuid.UUID(job_id),
+                    JobStatus.RUNNING,
                     celery_task_id=self.request.id,
                 )
                 await db.commit()
@@ -74,7 +77,9 @@ def run_research_task(self, job_id: str, query: str, depth: str) -> dict:
             except Exception as exc:
                 await db.rollback()
                 await update_job_status(
-                    db, uuid.UUID(job_id), JobStatus.FAILED,
+                    db,
+                    uuid.UUID(job_id),
+                    JobStatus.FAILED,
                     error_message=str(exc),
                 )
                 await db.commit()

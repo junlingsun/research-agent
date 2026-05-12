@@ -7,6 +7,7 @@ Internal loop:
 The agent critiques its own queries before passing them to search,
 ensuring they are specific, distinct, and cover different angles.
 """
+
 from __future__ import annotations
 
 import operator
@@ -27,8 +28,10 @@ MAX_REVISIONS = 2  # internal revision limit
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+
 class QueryCritique(BaseModel):
     """Structured output for the critique node."""
+
     is_good_enough: bool = Field(
         description="True if queries are specific, distinct, and comprehensive"
     )
@@ -42,6 +45,7 @@ class QueryCritique(BaseModel):
 
 class QueryPlan(BaseModel):
     """Structured output for generate and refine nodes."""
+
     queries: list[str] = Field(
         description="Distinct search queries each targeting a different aspect"
     )
@@ -52,11 +56,12 @@ class QueryPlan(BaseModel):
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
+
 class PlanState(TypedDict):
     # Inputs from orchestrator
     query: str
     depth: str
-    evaluation_feedback: str        # gaps from outer evaluator on retry
+    evaluation_feedback: str  # gaps from outer evaluator on retry
 
     # Internal state
     candidate_queries: list[str]
@@ -71,15 +76,18 @@ class PlanState(TypedDict):
 
 # ── LLM factory ───────────────────────────────────────────────────────────────
 
+
 def _get_llm():
     if settings.llm_provider == "groq":
         from langchain_groq import ChatGroq
+
         return ChatGroq(
             model=settings.llm_model,
             api_key=settings.groq_api_key,
             temperature=0.1,
         )
     from langchain_openai import ChatOpenAI
+
     return ChatOpenAI(
         model=settings.llm_model,
         api_key=settings.openai_api_key,
@@ -90,9 +98,11 @@ def _get_llm():
 
 # ── Nodes ─────────────────────────────────────────────────────────────────────
 
+
 async def generate_node(state: PlanState) -> dict:
     """Generate initial search queries from the research question."""
     from app.agents.constants import get_depth_config
+
     cfg = get_depth_config(state["depth"])
     n = cfg["max_queries"]
 
@@ -105,7 +115,8 @@ async def generate_node(state: PlanState) -> dict:
             f"Your queries must specifically address these gaps."
         )
 
-    system = SystemMessage(content=f"""
+    system = SystemMessage(
+        content=f"""
 You are an expert research strategist. Generate precise search queries.
 
 Query quality rules:
@@ -117,13 +128,16 @@ Query quality rules:
   - Bad: "quantum computing latest news"
 
 Output exactly {n} queries.
-""")
+"""
+    )
 
-    user = HumanMessage(content=(
-        f"Research question: {state['query']}\n"
-        f"Generate exactly {n} search queries."
-        f"{feedback_section}"
-    ))
+    user = HumanMessage(
+        content=(
+            f"Research question: {state['query']}\n"
+            f"Generate exactly {n} search queries."
+            f"{feedback_section}"
+        )
+    )
 
     structured_llm = _get_llm().with_structured_output(QueryPlan)
     result: QueryPlan = await structured_llm.ainvoke([system, user])
@@ -146,7 +160,8 @@ async def critique_node(state: PlanState) -> dict:
     """Critique the candidate queries for quality and specificity."""
     queries = state["candidate_queries"]
 
-    system = SystemMessage(content="""
+    system = SystemMessage(
+        content="""
 You are a search strategy critic. Your job is to find weaknesses in search queries.
 
 Evaluate queries on:
@@ -157,13 +172,16 @@ Evaluate queries on:
 
 Be strict. Vague queries waste search budget.
 Mark as good_enough only if ALL queries are specific and distinct.
-""")
+"""
+    )
 
-    user = HumanMessage(content=(
-        f"Research question: {state['query']}\n\n"
-        f"Queries to evaluate:\n"
-        + "\n".join(f"  {i+1}. {q}" for i, q in enumerate(queries))
-    ))
+    user = HumanMessage(
+        content=(
+            f"Research question: {state['query']}\n\n"
+            f"Queries to evaluate:\n"
+            + "\n".join(f"  {i+1}. {q}" for i, q in enumerate(queries))
+        )
+    )
 
     structured_llm = _get_llm().with_structured_output(QueryCritique)
     critique: QueryCritique = await structured_llm.ainvoke([system, user])
@@ -187,27 +205,34 @@ Mark as good_enough only if ALL queries are specific and distinct.
 async def refine_node(state: PlanState) -> dict:
     """Refine queries based on critique feedback."""
     from app.agents.constants import get_depth_config
+
     cfg = get_depth_config(state["depth"])
     n = cfg["max_queries"]
     critique = state["critique"]
 
-    system = SystemMessage(content=f"""
+    system = SystemMessage(
+        content=f"""
 You are an expert research strategist refining search queries based on critique feedback.
 
 Apply the critique suggestions precisely.
 Generate exactly {n} improved queries that address all identified issues.
-""")
+"""
+    )
 
-    user = HumanMessage(content=(
-        f"Research question: {state['query']}\n\n"
-        f"Current queries:\n"
-        + "\n".join(f"  {i+1}. {q}" for i, q in enumerate(state["candidate_queries"]))
-        + f"\n\nCritique issues:\n"
-        + "\n".join(f"  - {issue}" for issue in critique.issues)
-        + f"\n\nSuggestions:\n"
-        + "\n".join(f"  - {s}" for s in critique.suggestions)
-        + f"\n\nGenerate {n} improved queries addressing all issues."
-    ))
+    user = HumanMessage(
+        content=(
+            f"Research question: {state['query']}\n\n"
+            f"Current queries:\n"
+            + "\n".join(
+                f"  {i+1}. {q}" for i, q in enumerate(state["candidate_queries"])
+            )
+            + "\n\nCritique issues:\n"
+            + "\n".join(f"  - {issue}" for issue in critique.issues)
+            + "\n\nSuggestions:\n"
+            + "\n".join(f"  - {s}" for s in critique.suggestions)
+            + f"\n\nGenerate {n} improved queries addressing all issues."
+        )
+    )
 
     structured_llm = _get_llm().with_structured_output(QueryPlan)
     result: QueryPlan = await structured_llm.ainvoke([system, user])
@@ -248,6 +273,7 @@ async def finalize_node(state: PlanState) -> dict:
 
 # ── Routing ───────────────────────────────────────────────────────────────────
 
+
 def route_after_critique(state: PlanState) -> str:
     """Approve queries or refine them — with revision cap."""
     critique = state.get("critique")
@@ -266,6 +292,7 @@ def route_after_critique(state: PlanState) -> str:
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
 
+
 def build_plan_agent() -> StateGraph:
     graph = StateGraph(PlanState)
 
@@ -282,9 +309,9 @@ def build_plan_agent() -> StateGraph:
         {
             "finalize": "finalize_queries",
             "refine": "refine_queries",
-        }
+        },
     )
-    graph.add_edge("refine_queries", "critique_queries")   # internal loop
+    graph.add_edge("refine_queries", "critique_queries")  # internal loop
     graph.add_edge("finalize_queries", END)
 
     return graph.compile()
@@ -295,6 +322,7 @@ plan_agent = build_plan_agent()
 
 
 # ── Public interface ──────────────────────────────────────────────────────────
+
 
 async def run_plan_agent(
     query: str,
